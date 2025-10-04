@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RPG Growth Tracker App</title>
+<style>
+    html, body { height: 100%; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #1a1a2e; color: white; overflow-y: scroll; position: relative; }
+    .stars { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+    .star { position: absolute; background: white; border-radius: 50%; }
+    nav { display: flex; justify-content: space-around; background: rgba(25, 25, 50, 0.9); box-shadow: 0px -2px 10px rgba(0,0,0,0.2); position: fixed; bottom: 0; width: 100%; border-top-left-radius: 15px; border-top-right-radius: 15px; z-index: 1; }
+    nav button { flex: 1; padding: 10px; border: none; background: none; font-size: 14px; cursor: pointer; color: white; }
+    nav button.active { background: rgba(255,255,255,0.1); border-radius: 10px; }
+    .page { display: none; padding: 20px; min-height: calc(100vh - 60px); overflow-y: auto; z-index: 1; position: relative; background: transparent; padding-bottom: 100px; }
+    .page.active { display: block; }
+    .stat, .task-category, .journal-entry { margin-bottom: 15px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; box-shadow: 0px 2px 8px rgba(0,0,0,0.2); }
+    .progress { height: 15px; background: rgba(255,255,255,0.2); border-radius: 10px; overflow: hidden; }
+    .progress-bar { height: 100%; background: #4caf50; width: 0%; transition: width 0.3s ease; }
+    button { padding: 8px 12px; margin-top: 10px; border: none; background: #4a4a6a; color: white; border-radius: 5px; cursor: pointer; transition: background 0.3s ease; }
+    button:hover { background: #33334d; }
+    textarea, input[type="text"] { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 10px; font-size: 14px; background: rgba(255,255,255,0.1); color: white; }
+    textarea { resize: vertical; min-height: 100px; }
+    .input-container { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+    .input-container input { flex: 1; }
+    .input-container button { flex-shrink: 0; }
+    .journal-entry-content { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 100%; cursor: pointer; }
+    .entry-date { font-size: 12px; color: lightgray; margin-bottom: 5px; }
+    .delete-btn { background: #e74c3c; color: white; border-radius: 5px; padding: 3px 7px; font-size: 12px; cursor: pointer; margin-left: 10px; }
+</style>
+</head>
+<body>
+<div class="stars" id="stars"></div>
+<div id="homePage" class="page active"><div id="stats"></div></div>
+<div id="goalPage" class="page"><button onclick="generateGoal()">Generate New Goal</button><h3>Tracked Goals</h3><div id="trackedGoals"></div><h3>Daily Tasks</h3><div id="tasks"></div></div>
+<div id="journalPage" class="page"><div class="input-container"><textarea id="journalInput" placeholder="Write about your day..."></textarea></div><button onclick="addJournalEntry()">Add Entry</button><div id="journalEntries"></div></div>
+<div id="aiPage" class="page"><div class="input-container"><input type="text" id="aiInput" placeholder="What are you working on?"><button onclick="aiSuggestTasks()">Get Suggestions</button></div><div id="aiSuggestions"></div></div>
+<nav><button onclick="switchPage('homePage', this)" class="active">Home</button><button onclick="switchPage('goalPage', this)">Generate Goal</button><button onclick="switchPage('journalPage', this)">Journal</button><button onclick="switchPage('aiPage', this)">AI Assistant</button></nav>
+<script>
+function createStars() {
+    const starContainer = document.getElementById('stars');
+    for (let i = 0; i < 100; i++) {
+        const star = document.createElement('div');
+        star.className = 'star';
+        const size = Math.random() * 3 + 1;
+        star.style.width = size + 'px';
+        star.style.height = size + 'px';
+        star.style.top = Math.random() * window.innerHeight + 'px';
+        star.style.left = Math.random() * window.innerWidth + 'px';
+        star.style.opacity = Math.random();
+        starContainer.appendChild(star);
+    }
+}
+createStars();
+
+let stats = { Strength: { level: 1, xp: 0, xpNeeded: 100 }, Endurance: { level: 1, xp: 0, xpNeeded: 100 }, Intelligence: { level: 1, xp: 0, xpNeeded: 120 }, Creativity: { level: 1, xp: 0, xpNeeded: 80 } };
+let tasks = {};
+let journalEntries = [];
+
+function generateTasks() {
+    const defaultTasks = {
+        Strength: [{ name: 'Do 20 push-ups', xp: 20 }, { name: 'Do 15 pull-ups', xp: 25 }],
+        Endurance: [{ name: 'Run 3 km', xp: 20 }, { name: 'Do 100 jumping jacks', xp: 15 }],
+        Intelligence: [{ name: 'Write a SQL query for sales data', xp: 30 }, { name: 'Analyze a dataset with Power BI', xp: 35 }],
+        Creativity: [{ name: 'Draw a human figure for 20 minutes', xp: 25 }, { name: 'Sketch a complex object from life', xp: 30 }]
+    };
+    tasks = defaultTasks;
+    saveData();
+}
+
+function saveData() { localStorage.setItem('stats', JSON.stringify(stats)); localStorage.setItem('tasks', JSON.stringify(tasks)); localStorage.setItem('journalEntries', JSON.stringify(journalEntries)); }
+function loadData() { stats = JSON.parse(localStorage.getItem('stats')) || stats; tasks = JSON.parse(localStorage.getItem('tasks')) || {}; journalEntries = JSON.parse(localStorage.getItem('journalEntries')) || []; if (Object.keys(tasks).length === 0) { generateTasks(); } renderStats(); renderTasks(); renderJournal(); }
+function renderStats() { let statsDiv = document.getElementById('stats'); statsDiv.innerHTML = ''; for (let stat in stats) { let statObj = stats[stat]; let statElem = document.createElement('div'); statElem.className = 'stat'; statElem.innerHTML = `<h3>${stat} - Level ${statObj.level}</h3><div class="progress"><div class="progress-bar" style="width: ${Math.min(100, (statObj.xp / statObj.xpNeeded) * 100)}%"></div></div><p>${statObj.xp} / ${statObj.xpNeeded} XP</p>`; statsDiv.appendChild(statElem); } }
+function renderTasks() { let tasksDiv = document.getElementById('tasks'); tasksDiv.innerHTML = ''; for (let category in tasks) { let categoryElem = document.createElement('div'); categoryElem.className = 'task-category'; categoryElem.innerHTML = `<h4>${category}</h4>`; tasks[category].forEach((task, index) => { categoryElem.innerHTML += `<div><strong>${task.name}</strong> (+${task.xp} XP) <button onclick="completeTask('${category}', ${index})">Complete</button></div>`; }); tasksDiv.appendChild(categoryElem); } }
+function completeTask(category, index) { stats[category].xp += tasks[category][index].xp; if (stats[category].xp >= stats[category].xpNeeded) { stats[category].level++; stats[category].xp -= stats[category].xpNeeded; stats[category].xpNeeded = Math.floor(stats[category].xpNeeded * 1.5); } tasks[category].splice(index, 1); saveData(); renderStats(); renderTasks(); }
+function addJournalEntry() { let content = document.getElementById('journalInput').value; if (content.trim() === '') return; journalEntries.push({ date: new Date().toLocaleString(), content }); document.getElementById('journalInput').value = ''; saveData(); renderJournal(); }
+function deleteJournalEntry(idx) { journalEntries.splice(idx, 1); saveData(); renderJournal(); }
+function renderJournal() { let journalDiv = document.getElementById('journalEntries'); journalDiv.innerHTML = ''; journalEntries.forEach((entry, idx) => { let entryElem = document.createElement('div'); entryElem.className = 'journal-entry'; entryElem.innerHTML = `<div class="entry-date">${entry.date} <span class="delete-btn" onclick="deleteJournalEntry(${idx})">Delete</span></div><div class="journal-entry-content" onclick="toggleEntry(this, ${idx})">${truncateText(entry.content)}</div>`; journalDiv.appendChild(entryElem); }); }
+function truncateText(text) { return text.length > 100 ? text.substring(0, 100) + '...' : text; }
+function toggleEntry(element, idx) { if (element.innerText.endsWith('...')) { element.innerText = journalEntries[idx].content; } else { element.innerText = truncateText(journalEntries[idx].content); } }
+function switchPage(pageId, btn) { document.querySelectorAll('.page').forEach(page => page.classList.remove('active')); document.getElementById(pageId).classList.add('active'); document.querySelectorAll('nav button').forEach(button => button.classList.remove('active')); btn.classList.add('active'); }
+function aiSuggestTasks() {
+    const suggestions = {
+        Strength: ['Do 25 push-ups', 'Do 20 squats', 'Hold a plank for 1 minute'],
+        Endurance: ['Run 2 km in under 12 minutes', 'Cycle for 20 minutes'],
+        Intelligence: ['Write a SQL query to group data by category', 'Create a DAX formula in Power BI'],
+        Creativity: ['Sketch hands for 15 minutes', 'Draw a still life composition']
+    };
+    let aiDiv = document.getElementById('aiSuggestions');
+    aiDiv.innerHTML = '';
+    for (let cat in suggestions) {
+        let catDiv = document.createElement('div');
+        catDiv.className = 'task-category';
+        catDiv.innerHTML = `<h4>${cat} Suggestions</h4>`;
+        suggestions[cat].forEach(task => {
+            catDiv.innerHTML += `<div>${task} <button onclick=\"addTask('${cat}', '${task}', 20)\">+ Add</button></div>`;
+        });
+        aiDiv.appendChild(catDiv);
+    }
+}
+function addTask(category, name, xp) { if (!tasks[category]) tasks[category] = []; tasks[category].push({ name, xp }); saveData(); renderTasks(); }
+loadData();
+</script>
+</body>
+</html>
